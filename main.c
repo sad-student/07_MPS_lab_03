@@ -16,10 +16,24 @@ __interrupt void S2_handler(void){
 	}
 }
 
+#pragma vector = TIMER0_A0_VECTOR
+__interrupt void TA0_0_handler(void){
+
+}
+
+#pragma vector = TIMER0_A1_VECTOR
+__interrupt void TA0_handler(void){
+	P1OUT ^= BIT5;
+}
+
 int main(void) {
     WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
 
     __bis_SR_register(GIE);
+
+    P1SEL &= ~(BIT3 | BIT4 | BIT5);
+    P1DIR |= (BIT3 | BIT4 | BIT5);
+    P1OUT &= ~(BIT3 | BIT4 | BIT5);
 
 	P1SEL &= ~BIT7;
 	P1DIR &= ~BIT7;
@@ -39,6 +53,21 @@ int main(void) {
 	P2IE |= BIT2;
 
 	// configure SMCLK for frequency 1MHz
+//	P5SEL &= ~(BIT4 | BIT5);
+//	P5DIR &= ~BIT4;
+//	P5DIR |= BIT5;
+//	UCSCTL6 &= ~XT1BYPASS;
+//
+//	UCSCTL3 = (UCSCTL3 & (~0x070)) | SELREF__XT1CLK;
+//	UCSCTL3 = (UCSCTL3 & (~0x07)) | FLLREFDIV__2;
+//
+//	UCSCTL2 = (UCSCTL2 & (~0x0cff)) | ((8 - 1) & (0x0cff)); // FLLN multiplier
+//	UCSCTL2 = (UCSCTL2 & (~0x07000)) | FLLD__8; // FLLD divider
+//	UCSCTL1 = (UCSCTL1 & (~0x070)) | DCORSEL_1; // frequency range setting
+//	UCSCTL1 &= ~DISMOD; // enable modulation
+//
+//	UCSCTL5 = (UCSCTL5 & (~0x07)) | DIVM__1;
+//	UCSCTL4 = _UCSCTL4_SELM_F | SELM__DCOCLK;
 
 	TA0CTL = (TA0CTL & (~0x0300)) | TASSEL__SMCLK;
 	//TA0CTL = (TA0CTL & (~0x030)) | MC__UP;
@@ -47,6 +76,7 @@ int main(void) {
 	TA0CTL |= TACLR;
 
 	TA0CCRN0 = 0x8000; // 0.5s for up + 0.5s for down counting if clocked with 1MHz/8
+	TA0CCTL2 = (TA0CCTL2 & (~0x0100)) & ~CAP;
 	TA0CCTL2 = (TA0CCTL2 & (~0x0f0)) | OUT_MOD7;
 	TA0CCTL2 = (TA0CCTL2 & (~0x08)) | CCIE;
 
