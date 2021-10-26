@@ -4,6 +4,7 @@
 __interrupt void S1_handler(void){
 	if(P1IFG & BIT7){
 		//
+		P1OUT &= ~BIT5;
 		P1IFG &= ~BIT7;
 	}
 }
@@ -58,29 +59,29 @@ int main(void) {
 //	P5DIR |= BIT5;
 //	UCSCTL6 &= ~XT1BYPASS;
 //
-//	UCSCTL3 = (UCSCTL3 & (~0x070)) | SELREF__XT1CLK;
-//	UCSCTL3 = (UCSCTL3 & (~0x07)) | FLLREFDIV__2;
-//
-//	UCSCTL2 = (UCSCTL2 & (~0x0cff)) | ((8 - 1) & (0x0cff)); // FLLN multiplier
-//	UCSCTL2 = (UCSCTL2 & (~0x07000)) | FLLD__8; // FLLD divider
-//	UCSCTL1 = (UCSCTL1 & (~0x070)) | DCORSEL_1; // frequency range setting
-//	UCSCTL1 &= ~DISMOD; // enable modulation
-//
-//	UCSCTL5 = (UCSCTL5 & (~0x07)) | DIVM__1;
-//	UCSCTL4 = _UCSCTL4_SELM_F | SELM__DCOCLK;
+	UCSCTL3 = (UCSCTL3 & (~0x070)) | SELREF__XT1CLK;
+	UCSCTL3 = (UCSCTL3 & (~0x07)) | FLLREFDIV__2;
+
+	UCSCTL2 = (UCSCTL2 & (~0x0cff)) | ((8 - 1) & (0x0cff)); // FLLN multiplier
+	UCSCTL2 = (UCSCTL2 & (~0x07000)) | FLLD__8; // FLLD divider
+	UCSCTL1 = (UCSCTL1 & (~0x070)) | DCORSEL_1; // frequency range setting
+	UCSCTL1 &= ~DISMOD; // enable modulation
+
+	//UCSCTL5 = (UCSCTL5 & (~0x07)) | DIVM__1;
+	UCSCTL4 = (UCSCTL4 & (~0x070)) | SELS__DCOCLKDIV;
+	UCSCTL5 = (UCSCTL5 & (~0x070)) | DIVS__1;
 
 	TA0CTL = (TA0CTL & (~0x0300)) | TASSEL__SMCLK;
 	//TA0CTL = (TA0CTL & (~0x030)) | MC__UP;
 	TA0CTL = (TA0CTL & (~0x030)) | MC__CONTINOUS;
-	TA0CTL = (TA0CTL & (~0x0c0)) | ID__1;
+	TA0CTL = (TA0CTL & (~0x0c0)) | ID__8;
 	TA0CTL |= TACLR;
 
-	TA0CCRN0 = 0x8000; // 0.5s for up + 0.5s for down counting if clocked with 1MHz/8
+	TA0CCR0 = 0x8000; // 0.5s for up + 0.5s for down counting if clocked with 1MHz/8
 	TA0CCTL2 = (TA0CCTL2 & (~0x0100)) & ~CAP;
-	TA0CCTL2 = (TA0CCTL2 & (~0x0f0)) | OUT_MOD7;
+	TA0CCTL2 = (TA0CCTL2 & (~0x0f0)) | OUTMOD_7;
 	TA0CCTL2 = (TA0CCTL2 & (~0x08)) | CCIE;
 
-
-	
+	//TA0IV
 	return 0;
 }
