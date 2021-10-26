@@ -17,14 +17,53 @@ __interrupt void S2_handler(void){
 	}
 }
 
+#pragma vector = TIMER1_A0_VECTOR
+__interrupt void TA1_0_handler(void){
+	P1OUT ^= BIT2;
+}
+
+#pragma vector = TIMER1_A1_VECTOR
+__interrupt void TA1_handler(void){
+	if (P1IN & BIT7){
+		switch(TA0IV){
+		case 0x04:
+			P1OUT ^= BIT5;
+			break;
+		default:
+			break;
+		}
+	} else { // S1 pushed
+		switch(TA0IV){
+			case 0x04:
+				if (P1OUT & BIT5){
+					P1OUT ^= BIT5;
+				} else if (P1OUT & BIT4){
+					P1OUT ^= BIT4;
+				} else if (P1OUT & BIT3){
+					P1OUT ^= BIT3;
+				}
+				// change comparison value
+				break;
+			default:
+				break;
+		}
+	}
+}
+
 #pragma vector = TIMER0_A0_VECTOR
 __interrupt void TA0_0_handler(void){
-
+	P1OUT ^= BIT2;
 }
 
 #pragma vector = TIMER0_A1_VECTOR
 __interrupt void TA0_handler(void){
-	P1OUT ^= BIT5;
+	switch(TA0IV){
+	case 0x04:
+		P1OUT ^= BIT5;
+		break;
+	default:
+		break;
+	}
 }
 
 int main(void) {
@@ -77,7 +116,7 @@ int main(void) {
 	TA0CTL = (TA0CTL & (~0x0c0)) | ID__8;
 	TA0CTL |= TACLR;
 
-	TA0CCR0 = 0x8000; // 0.5s for up + 0.5s for down counting if clocked with 1MHz/8
+	TA0CCR2 = 0x8000; // 0.5s for up + 0.5s for down counting if clocked with 1MHz/8
 	TA0CCTL2 = (TA0CCTL2 & (~0x0100)) & ~CAP;
 	TA0CCTL2 = (TA0CCTL2 & (~0x0f0)) | OUTMOD_7;
 	TA0CCTL2 = (TA0CCTL2 & (~0x08)) | CCIE;
