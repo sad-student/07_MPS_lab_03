@@ -1,10 +1,14 @@
 #include <msp430.h> 
 
+short int state = 0;
+
 #pragma vector = PORT1_VECTOR
 __interrupt void S1_handler(void){
 	if(P1IFG & BIT7){
 		//
-		P1OUT &= ~BIT5;
+
+		TA0CCR2 = TA0CCR0 + (unsigned int)(0xffff / 2 * 0.9); // 0.5s for up + 0.5s for down counting if clocked with 1MHz/8
+		TA0CCTL2 = (TA0CCTL2 & (~0x08)) | CCIE;
 		P1IFG &= ~BIT7;
 	}
 }
@@ -25,15 +29,23 @@ __interrupt void TA1_0_handler(void){
 #pragma vector = TIMER1_A1_VECTOR
 __interrupt void TA1_handler(void){
 	if (P1IN & BIT7){
-		switch(TA0IV){
-		case 0x04:
-			P1OUT ^= BIT5;
-			break;
-		default:
-			break;
+		switch(TA1IV){
+			case 0x04:
+				if (~P1OUT & BIT5){
+					P1OUT ^= BIT5;
+				} else if (~P1OUT & BIT4){
+					P1OUT ^= BIT4;
+				} else if (~P1OUT & BIT3){
+					P1OUT ^= BIT3;
+				}
+				// change comparison value
+				TA1CCR1 += (unsigned int)(0xffff / 2 * 1.5);
+				break;
+			default:
+				break;
 		}
 	} else { // S1 pushed
-		switch(TA0IV){
+		switch(TA1IV){
 			case 0x04:
 				if (P1OUT & BIT5){
 					P1OUT ^= BIT5;
@@ -43,6 +55,8 @@ __interrupt void TA1_handler(void){
 					P1OUT ^= BIT3;
 				}
 				// change comparison value
+				TA1CCR1 += (unsigned int)(0xffff / 2 * 0.9);
+				//TA1CCR1 += (unsigned int)(0xffff / 2 * 1.5);
 				break;
 			default:
 				break;
@@ -112,9 +126,22 @@ int main(void) {
 
 	TA0CTL = (TA0CTL & (~0x0300)) | TASSEL__SMCLK;
 	//TA0CTL = (TA0CTL & (~0x030)) | MC__UP;
-	TA0CTL = (TA0CTL & (~0x030)) | MC__CONTINOUS;
-	TA0CTL = (TA0CTL & (~0x0c0)) | ID__8;
+	TA0CTL = (TA0CTL & (~0x030)) | MC__UPDOWN;
+	TA0CTL = (TA0CTL & (~0x0c0)) | ID__16;
 	TA0CTL |= TACLR;
+	TA0CCR0 = 0xffff;
+
+	TA0CCR2 = 0x8000; // 0.5s for up + 0.5s for down counting if clocked with 1MHz/8
+	TA0CCTL2 = (TA0CCTL2 & (~0x0100)) & ~CAP;
+	TA0CCTL2 = (TA0CCTL2 & (~0x0f0)) | OUTMOD_7;
+	TA0CCTL2 = (TA0CCTL2 & (~0x08)) | CCIE;
+
+	TA1CTL = (TA1CTL & (~0x0300)) | TASSEL__SMCLK;
+	TA1CTL = (TA1CTL & (~0x030)) | MC__CONTINOUS;
+	TA1CTL = (TA1CTL & (~0x0c0)) | ID__32;
+	TA1CTL |= TACLR;
+	TA1CCR0 = 0xffff;
+	// TACCR0 = (unsigned int)(0xffff / 2 * 0.9);
 
 	TA0CCR2 = 0x8000; // 0.5s for up + 0.5s for down counting if clocked with 1MHz/8
 	TA0CCTL2 = (TA0CCTL2 & (~0x0100)) & ~CAP;
