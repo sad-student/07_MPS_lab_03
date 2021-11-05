@@ -13,9 +13,10 @@ unsigned short int button_halt = 0;
 __interrupt void S1_handler(void){
 	if(P1IFG & BIT7){
 		if (~button_halt & BIT7){
-			P1IES ^= BIT7;
 			if(P1IES & BIT7){
 				state = ~state;
+				// unsigned int ta1r_temp = TA1R;
+	            TA1CCTL1 = (TA1CCTL1 & (~0x01)) & ~CCIFG;
 				if (state) {
 					TA1CCR1 = TA1R + (unsigned int)(TAxCCR_05Hz / 2 * 0.9);
 				} else {
@@ -27,6 +28,7 @@ __interrupt void S1_handler(void){
 				TA2CCTL1 = (TA2CCTL1 & (~0x010)) | CCIE;
 				button_halt |= BIT7;
 			}
+			P1IES ^= BIT7;
 		}
 		P1IFG &= ~BIT7;
 	}
@@ -77,7 +79,7 @@ __interrupt void TA1_handler(void){
 				// change comparison value
 				TA1CCR1 += (unsigned int)(TAxCCR_05Hz / 2 * 1.5);
             }
-            TA1CCTL1 = (TA1CCTL1 & (~0x01)) & ~CCIFG;
+            // TA1CCTL1 = (TA1CCTL1 & (~0x01)) & ~CCIFG;
             break;
         default:
             break;
