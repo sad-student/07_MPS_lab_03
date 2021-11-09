@@ -1,7 +1,7 @@
 #include <msp430.h>
 
 #define TAxCCR_05Hz 0xffff /* timer upper bound count value */
-#define BUTTON_DELAY 0x0e00
+#define BUTTON_DELAY 0x0500
 
 short unsigned int state = 0;
 short unsigned int timer = 0;
@@ -15,14 +15,22 @@ __interrupt void S1_handler(void){
 		if (~button_halt & BIT7){
 			if(P1IES & BIT7){
 				state = ~state;
-				// unsigned int ta1r_temp = TA1R;
-	            TA1CCTL1 = (TA1CCTL1 & (~0x01)) & ~CCIFG;
-				if (state) {
-					TA1CCR1 = TA1R + (unsigned int)(TAxCCR_05Hz / 2 * 0.9);
+
+				if(timer){
+					//WDT delays
+					counter = 0;
+					WDTCTL = (WDTCTL & (~0x0ff88)) | (WDTPW | (~WDTHOLD & (0x080)) | WDTCNTCL);
+					SFRIE1 = (SFRIE1 & (~0x01)) | WDTIE;
 				} else {
-					TA1CCR1 = TA1R + (unsigned int)(TAxCCR_05Hz / 2 * 1.5);
+					// TA delays
+					TA1CCTL1 = (TA1CCTL1 & (~0x01)) & ~CCIFG;
+					if (state) {
+						TA1CCR1 = TA1R + (unsigned int)(TAxCCR_05Hz / 2 * 0.9);
+					} else {
+						TA1CCR1 = TA1R + (unsigned int)(TAxCCR_05Hz / 2 * 1.5);
+					}
+					TA1CCTL1 = (TA1CCTL1 & (~0x010)) | CCIE;
 				}
-				TA1CCTL1 = (TA1CCTL1 & (~0x010)) | CCIE;
 
 				TA2CCR1 = TA2R + BUTTON_DELAY;
 				TA2CCTL1 = (TA2CCTL1 & (~0x010)) | CCIE;
@@ -34,36 +42,42 @@ __interrupt void S1_handler(void){
 	}
 }
 
-//#pragma vector = PORT2_VECTOR
-//__interrupt void S2_handler(void){
-//	if(P2IFG & BIT2){
-//		//
-//        timer = ~timer;
-//        counter = 0;
-//        if (timer) {
-//            TA1CCTL1 = (TA1CCTL1 & (~0x010)) | (~CCIE & (0x010));
-//        } else {
-//            WDTCTL = WDTPW | WDTHOLD;
-//        }
-//
-//        TA0CCR4 = TA0R + BUTTON_DELAY;
-//		TA0CCTL4 = (TA0CCTL4 & (~0x010)) | CCIE;
-//		// P2IFG &= ~BIT2;
-//	}
-//}
+#pragma vector = PORT2_VECTOR
+__interrupt void S2_handler(void){
+	if(P2IFG & BIT2){
+		if(~button_halt & BIT2){
+			if(P2IES & BIT2){
+				timer = ~timer;
+				counter = 0;
+				if (timer) {
+					TA1CCTL1 = (TA1CCTL1 & (~0x010)) | (~CCIE & (0x010));
+				} else {
+					WDTCTL = (WDTCTL & (~0x0ff80)) | (WDTPW | WDTHOLD);
+					SFRIE1 = (SFRIE1 & (~0x01)) | (~WDTIE & (0x01));
+				}
+
+				TA2CCR2 = TA2R + BUTTON_DELAY;
+				TA2CCTL2 = (TA2CCTL2 & (~0x010)) | CCIE;
+				button_halt |= BIT2;
+			}
+			P2IES ^= BIT2;
+		}
+		P2IFG &= ~BIT2;
+	}
+}
 
 #pragma vector = TIMER1_A1_VECTOR
 __interrupt void TA1_handler(void){
     switch(TA1IV){
         case TA1IV_TACCR1:
             if (state) {
-                if (~P1OUT & BIT3){
-                    P1OUT ^= BIT3;
+                if (~P1OUT & BIT2){
+                    P1OUT ^= BIT2;
                 } else if (~P1OUT & BIT4){
                     P1OUT ^= BIT4;
                 } else if (~P1OUT & BIT5){
                     P1OUT ^= BIT5;
-                    TA1CCTL1 = (TA1CCTL1 & (~0x010)) & ~CCIE;// | (~CCIE & (0x010));
+                    TA1CCTL1 = (TA1CCTL1 & (~0x010)) | (~CCIE & (0x010)); // & ~CCIE;
                 }
                 // change comparison value
                 TA1CCR1 += (unsigned int)(TAxCCR_05Hz / 2 * 0.9);
@@ -72,14 +86,13 @@ __interrupt void TA1_handler(void){
 					P1OUT ^= BIT5;
 				} else if (P1OUT & BIT4){
 					P1OUT ^= BIT4;
-				} else if (P1OUT & BIT3){
-					P1OUT ^= BIT3;
-                    TA1CCTL1 = (TA1CCTL1 & (~0x010)) & ~CCIE;// | (~CCIE & (0x010));
+				} else if (P1OUT & BIT2){
+					P1OUT ^= BIT2;
+                    TA1CCTL1 = (TA1CCTL1 & (~0x010)) | (~CCIE & (0x010)); // & ~CCIE;
 				}
 				// change comparison value
 				TA1CCR1 += (unsigned int)(TAxCCR_05Hz / 2 * 1.5);
             }
-            // TA1CCTL1 = (TA1CCTL1 & (~0x01)) & ~CCIFG;
             break;
         default:
             break;
@@ -90,7 +103,7 @@ __interrupt void TA1_handler(void){
 __interrupt void TA0_handler(void){
 	switch(TA0IV){
 		case TA0IV_TACCR2:
-			P1OUT ^= BIT2;
+			//P1OUT ^= BIT2;
 			break;
 		default:
 			break;
@@ -103,26 +116,69 @@ __interrupt void TA2_handler(void){
 		case TA2IV_TACCR1:
 			// S1
 			button_halt &= ~BIT7;
-			TA2CCTL1 = (TA2CCTL1 & (~0x010)) & ~CCIE;// | (~CCIE & (0x010));
+			TA2CCTL1 = (TA2CCTL1 & (~0x010)) | (~CCIE & (0x010)); // & ~CCIE;
 			break;
 		case TA2IV_TACCR2:
 			// S2
-			P2IFG &= ~BIT2;
-			TA2CCTL2 = (TA2CCTL2 & (~0x010)) & ~CCIE;//| (~CCIE & (0x010));
+			button_halt &= ~BIT2;
+			TA2CCTL2 = (TA2CCTL2 & (~0x010)) | (~CCIE & (0x010)); // & ~CCIE;
 			break;
 		default:
 			break;
 	}
 }
 
+#pragma vector = WDT_VECTOR
+__interrupt void WDT_handler(void){
+    if (state) {
+        if(counter < 12){
+            ++counter;
+            return;
+        }
+        counter = 0;
+        if (~P1OUT & BIT3){
+            P1OUT ^= BIT3;
+        } else if (~P1OUT & BIT4){
+            P1OUT ^= BIT4;
+        } else if (~P1OUT & BIT5){
+            P1OUT ^= BIT5;
+        	SFRIE1 = (SFRIE1 & (~0x01)) | (~WDTIE & (0x01));
+        }
+    	WDTCTL = (WDTCTL & (~0x0ff08)) | (WDTPW | WDTCNTCL);
+    } else {
+        if(counter < 19){
+            ++counter;
+            return;
+        }
+        counter = 0;
+        if (P1OUT & BIT5){
+            P1OUT ^= BIT5;
+        } else if (P1OUT & BIT4){
+            P1OUT ^= BIT4;
+        } else if (P1OUT & BIT3){
+            P1OUT ^= BIT3;
+        	SFRIE1 = (SFRIE1 & (~0x01)) | (~WDTIE & (0x01));
+        }
+    	WDTCTL = (WDTCTL & (~0x0ff08)) | (WDTPW | WDTCNTCL);
+    }
+}
+
+
 int main(void) {
     WDTCTL = WDTPW | WDTHOLD;	// Stop watchdog timer
 
     __bis_SR_register(GIE);
 
-    P1SEL &= ~(BIT2 | BIT3 | BIT4 | BIT5);
-    P1DIR |= (BIT2 | BIT3 | BIT4 | BIT5);
-    P1OUT &= ~(BIT2 | BIT3 | BIT4 | BIT5);
+//    P1SEL &= ~(BIT2 | BIT3 | BIT4 | BIT5);
+//    P1DIR |= (BIT2 | BIT3 | BIT4 | BIT5);
+//    P1OUT &= ~(BIT2 | BIT3 | BIT4 | BIT5);
+
+    P1SEL &= ~(BIT2 | BIT4 | BIT5);
+    P1DIR |= (BIT2 | BIT4 | BIT5);
+    P1OUT &= ~(BIT2 | BIT4 | BIT5);
+
+    P1SEL |= BIT3;
+    P1DIR |= BIT3;
 
 	P1SEL &= ~BIT7;
 	P1DIR &= ~BIT7;
@@ -133,13 +189,13 @@ int main(void) {
 	P1IE |= BIT7;
 
 
-//	P2SEL &= ~BIT2;
-//	P2DIR &= ~BIT2;
-//	P2OUT |= BIT2;
-//	P2REN |= BIT2;
-//	P2IES |= BIT2;
-//	P2IFG &= ~BIT2;
-//	P2IE |= BIT2;
+	P2SEL &= ~BIT2;
+	P2DIR &= ~BIT2;
+	P2OUT |= BIT2;
+	P2REN |= BIT2;
+	P2IES |= BIT2;
+	P2IFG &= ~BIT2;
+	P2IE |= BIT2;
 
 	// configure SMCLK for frequency 1MHz
 //	P5SEL &= ~(BIT4 | BIT5);
@@ -165,7 +221,7 @@ int main(void) {
 
 	TA0CCR2 = 0x8000; // 0.5s for up + 0.5s for down counting if clocked with 1MHz/8
 	TA0CCTL2 = (TA0CCTL2 & (~0x0100)) & ~CAP;
-	TA0CCTL2 = (TA0CCTL2 & (~0x0f0)) | OUTMOD_7;
+	TA0CCTL2 = (TA0CCTL2 & (~0x034e4)) | (CCIS_3 | SCCI | OUTMOD_7 | OUT);
 	TA0CCTL2 = (TA0CCTL2 & (~0x010)) | CCIE;
 
 
@@ -173,7 +229,6 @@ int main(void) {
 	TA1CTL = (TA1CTL & (~0x030)) | MC__CONTINOUS;
 	TA1CTL = (TA1CTL & (~0x0c0)) | ID__4;
 	TA1CTL |= TACLR;
-	//TA1CCR0 = TAxCCR_05Hz;
 	TA1CCTL1 = (TA1CCTL1 & (~0x0100)) & ~CAP;
 	TA1CCTL1 = (TA1CCTL1 & (~0x010)) & ~CCIE;
 	
@@ -199,5 +254,7 @@ int main(void) {
     // divide by 9 to gain 1.1Hz (0.9s period)
     // divide by 15 to gain 0.66Hz (1.5s period)
 
+
+	WDTCTL = (WDTCTL & (~0x0ff7f)) | (WDTPW | WDTSSEL__SMCLK | WDTTMSEL | WDTCNTCL | WDTIS__8192);
 	return 0;
 }
