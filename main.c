@@ -7,12 +7,12 @@ short unsigned int state = 0;
 short unsigned int timer = 0;
 unsigned int counter = 0;
 
-unsigned short int button_halt = 0;
+unsigned int glitch_counters[] = { 0, 0 };
 
 #pragma vector = PORT1_VECTOR
 __interrupt void S1_handler(void){
 	if(P1IFG & BIT7){
-		if (~button_halt & BIT7){
+		if (glitch_counters[0] == 0){
 			if(P1IES & BIT7){
 				state = ~state;
 
@@ -31,13 +31,14 @@ __interrupt void S1_handler(void){
 					}
 					TA1CCTL1 = (TA1CCTL1 & (~0x010)) | CCIE;
 				}
-
-				TA2CCR1 = TA2R + BUTTON_DELAY;
-				TA2CCTL1 = (TA2CCTL1 & (~0x010)) | CCIE;
-				button_halt |= BIT7;
 			}
 			P1IES ^= BIT7;
 		}
+
+		++glitch_counters[0];
+		TA2CCR1 = TA2R + BUTTON_DELAY;
+		TA2CCTL1 = (TA2CCTL1 & (~0x010)) | CCIE;
+
 		P1IFG &= ~BIT7;
 	}
 }
@@ -45,7 +46,7 @@ __interrupt void S1_handler(void){
 #pragma vector = PORT2_VECTOR
 __interrupt void S2_handler(void){
 	if(P2IFG & BIT2){
-		if(~button_halt & BIT2){
+		if(glitch_counters[1] == 0){
 			if(P2IES & BIT2){
 				timer = ~timer;
 				counter = 0;
@@ -55,13 +56,14 @@ __interrupt void S2_handler(void){
 					WDTCTL = (WDTCTL & (~0x0ff80)) | (WDTPW | WDTHOLD);
 					SFRIE1 = (SFRIE1 & (~0x01)) | (~WDTIE & (0x01));
 				}
-
-				TA2CCR2 = TA2R + BUTTON_DELAY;
-				TA2CCTL2 = (TA2CCTL2 & (~0x010)) | CCIE;
-				button_halt |= BIT2;
 			}
 			P2IES ^= BIT2;
 		}
+
+		++glitch_counters[1];
+		TA2CCR2 = TA2R + BUTTON_DELAY;
+		TA2CCTL2 = (TA2CCTL2 & (~0x010)) | CCIE;
+
 		P2IFG &= ~BIT2;
 	}
 }
@@ -115,12 +117,12 @@ __interrupt void TA2_handler(void){
 	switch(TA2IV){
 		case TA2IV_TACCR1:
 			// S1
-			button_halt &= ~BIT7;
+			glitch_counters[0] = 0;
 			TA2CCTL1 = (TA2CCTL1 & (~0x010)) | (~CCIE & (0x010)); // & ~CCIE;
 			break;
 		case TA2IV_TACCR2:
 			// S2
-			button_halt &= ~BIT2;
+			glitch_counters[1] = 0;
 			TA2CCTL2 = (TA2CCTL2 & (~0x010)) | (~CCIE & (0x010)); // & ~CCIE;
 			break;
 		default:
@@ -136,8 +138,8 @@ __interrupt void WDT_handler(void){
             return;
         }
         counter = 0;
-        if (~P1OUT & BIT3){
-            P1OUT ^= BIT3;
+        if (~P1OUT & BIT2){
+            P1OUT ^= BIT2;
         } else if (~P1OUT & BIT4){
             P1OUT ^= BIT4;
         } else if (~P1OUT & BIT5){
@@ -155,8 +157,8 @@ __interrupt void WDT_handler(void){
             P1OUT ^= BIT5;
         } else if (P1OUT & BIT4){
             P1OUT ^= BIT4;
-        } else if (P1OUT & BIT3){
-            P1OUT ^= BIT3;
+        } else if (P1OUT & BIT2){
+            P1OUT ^= BIT2;
         	SFRIE1 = (SFRIE1 & (~0x01)) | (~WDTIE & (0x01));
         }
     	WDTCTL = (WDTCTL & (~0x0ff08)) | (WDTPW | WDTCNTCL);
@@ -172,6 +174,7 @@ int main(void) {
 //    P1SEL &= ~(BIT2 | BIT3 | BIT4 | BIT5);
 //    P1DIR |= (BIT2 | BIT3 | BIT4 | BIT5);
 //    P1OUT &= ~(BIT2 | BIT3 | BIT4 | BIT5);
+
 
     P1SEL &= ~(BIT2 | BIT4 | BIT5);
     P1DIR |= (BIT2 | BIT4 | BIT5);
